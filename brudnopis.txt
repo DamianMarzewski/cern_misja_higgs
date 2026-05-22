@@ -173,3 +173,38 @@ T_e = 8.0 / (math.log(p) + 2.0) #[eV] #Średnia temperatura elektronu, (współc
         A = 1.2e-14 #[m^3/s] #Czynnik przedwykładniczy definiuje częstotliwość zderzeń efektywnych kinetycznie 
         
         kd = A * (T_e**0.5) * math.exp(-E_a_h2 / T_e) #Współczynnik dysocjacji 
+
+
+'''
+Przeprowadzenie testowej symulacji
+'''
+
+if __name__ == "__main__":       
+    l4 = Linac4(PhysicalConstants(), Electron(), Proton(), Hydrogen(), Hydride_ion())
+
+    wiazka = Beam()
+
+    time_ms = float(input("Podaj czas otwarcia zaworu w milisekundach: "))
+    total_hydrogen_mass=l4.I_S_calculate_mass_hydrogen(time_ms)
+
+    n=l4.I_S_calculate_number_density(total_hydrogen_mass)
+
+    p=l4.I_S_calculate_chamber_pressure(n)
+
+    I_S_rf_power_start = float(input("Podaj moc startowa fal radiowych zakres 40-50 maks 100 kw:")) 
+    I_S_rf_power= float(input("Podaj moc fal radiowych zakres 10-50 maks 50 kw:")) 
+
+    rf_work, ionization_efficiency, I_S_rf_power = l4.I_S_calculate_RF_field_energy(n, I_S_rf_power_start, I_S_rf_power)
+
+    ne = l4.I_S_calculate_electron_density( I_S_rf_power, ionization_efficiency)
+
+    I_final = l4.I_S_calculate__beam_current(ne)
+    N_Intensity = l4.I_S_calculate_beam_intensity(I_final)
+    epsilon = l4.I_S_calculate_beam_emittance()
+
+    wiazka.energy = 4.5E-2
+    wiazka.current = I_final  
+    wiazka.N_Intensity =  N_Intensity 
+    wiazka.epsilon = epsilon
+
+    print(f"Informacje o wiązce:\n-energia wiązki {wiazka.energy}, \n-prąd w wiązce {wiazka.current}, \n-ilość jonów w wiązce tak zwana koncentracja jonów {wiazka.N_Intensity} \n-emitacja wiązki {wiazka.epsilon}")
