@@ -109,8 +109,8 @@ def Print_title_screen(display_time=8, lenght_bar=106):
 {colors.title_game_color1}| |____| |____| | \ \| |\  |  _   {colors.title_game_color2}| |  | |_| |_ ____) | |__| / ____ \   | |  | |_| || |__| | |__| |____) |
 {colors.title_game_color1} \_____|______|_|  \_\_| \_| (_)  {colors.title_game_color2}|_|  |_|_____|_____/ \____/_/    \_\  |_|  |_|_____\_____|\_____|_____/ {colors.clear}
 '''
-    #pod funkcja rysująca klatki
-    def print_frame(i, max_bar_lenght, clear=False):
+   #pod funkcja rysująca klatki
+    def print_frame(i, current_bar_lenght, clear=False):
         
         if clear:
             Console_clear() 
@@ -118,28 +118,28 @@ def Print_title_screen(display_time=8, lenght_bar=106):
             sys.stdout.write("\033[H")  
             sys.stdout.flush()
         
-        
         current_console_width = os.get_terminal_size().columns
 
-        spaces_count = [int((current_console_width-104)/2), int((current_console_width-4)/2), int((current_console_width-lenght_bar)/2), int((current_console_width-17)/2), int((current_console_width - 40)/2)]
+        #obliczanie spacji przed danym wypisaniem
+        spaces_count = [int((current_console_width-104)/2), int((current_console_width-4)/2), int((current_console_width-current_bar_lenght)/2), int((current_console_width - 17) / 2), int((current_console_width - 40) / 2)]
         
         if current_console_width >= 111:
            
             lines = logo.split('\n')
             for line in lines:
-                if line.strip():  # Pomija puste linie na końcach
+                if line.strip():
                     print(" " * spaces_count[0] + line)
             
             #wypisanie paska ładowania
-            percent = int((i / max_bar_lenght) * 100)
-            blocks = "█" * i + "░" * (max_bar_lenght - i)
+            percent = int((i / current_bar_lenght) * 100)
+            blocks = "█" * i + "░" * (current_bar_lenght - i)
 
             sys.stdout.write(f"\n{colors.bar_color}\033[K\n")
             sys.stdout.write(" " * spaces_count[1] + f"{percent}%\033[K\n")
             sys.stdout.write(" " * spaces_count[2] + f"[{blocks}]{colors.clear}\033[K\n")
         else:
             #wypisywanie dla zbyt małego okna
-            percent = int((i / max_bar_lenght) * 100)
+            percent = int((i / current_bar_lenght) * 100)
             print(f"{colors.bar_color}\n" * 2)
             print(" " * spaces_count[3] + "CERN: MISJA HIGGS\n")
             print(" " * spaces_count[1] + f"{percent}%")
@@ -156,12 +156,7 @@ def Print_title_screen(display_time=8, lenght_bar=106):
             sys.stdout.flush()
         
         time.sleep(0.1) 
-        
         console_width = os.get_terminal_size().columns
-
-    #obliczenie ostatecznej długości paska
-    lenght_bar = min(lenght_bar, (console_width - 20))
-    if lenght_bar < 10: lenght_bar = 10 # Zabezpieczenie przed ujemną długością
 
     #ukrycie kursora na początku wyrysowaniu
     sys.stdout.write(colors.hide_cursor) 
@@ -169,22 +164,37 @@ def Print_title_screen(display_time=8, lenght_bar=106):
     previous_console_width = console_width
 
     #pętla tworząca animacje paska
-    for i in range(lenght_bar + 1):
+    i = 0
+    max_bar_lenght = 106
+    while True:
         console_width = os.get_terminal_size().columns
         clear = False
-        #sprawdzanie czy nie doszło do zmiany rozmiarów okna
+        
         if console_width != previous_console_width:
             clear = True
-            # Dopasowujemy długość paska do nowych wymiarów okna, żeby nie wyszedł poza ekran
-            lenght_bar = min(106, (console_width - 20))
-            if lenght_bar < 10: lenght_bar = 10
             previous_console_width = console_width
-        
-        print_frame(min(i, lenght_bar), lenght_bar, clear=clear)
 
-        time.sleep(display_time / lenght_bar)
+        #obliczanie dynamicznej długość paska dla TEGO konkretnego kroku
+        current_lenght_bar = min(max_bar_lenght, (console_width - 20))
+        if current_lenght_bar < 10: 
+            current_lenght_bar = 10
 
-    time.sleep(1)
+        #zabezpieczenie przed wiekszym paskiem niż w rzeczywistości chcemy
+        if i > current_lenght_bar:
+            i = current_lenght_bar
+
+        #wypisanie klatki
+        print_frame(i, current_lenght_bar, clear=clear)
+
+        #zakończenie petli, gdy osiągnięto realny koniec paska
+        if i >= current_lenght_bar:
+            break
+
+        #dynamiczny czas odczekania dopasowany do obecnej długości paska
+        time.sleep(display_time / current_lenght_bar)
+        i += 1
+
+    time.sleep(2)
     #przywrócenie kursora i czyszczenie formatowania
     sys.stdout.write(f"{colors.clear}{colors.show_cursor}")
     Console_clear()
