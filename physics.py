@@ -54,7 +54,11 @@ class HydrideIon():
         self.charge = -1.602176634E-19 #[C]
         self.binding_energy_ev = 0.754 #[eV]
         self.max_safe_magnetic_field = 0.3 #[T]
-        
+"""
+-+/===================================/+-
+    Klasa odcinka Negative Ion Source
+-+/===================================/+-
+"""        
 #Klasa odcinka w systemie akceleartorów (butla z H2 -> Linac4) - zawiera wszystkie metody fizyczne dla tego odcinka
 class NegativeIonSource():
 
@@ -84,18 +88,12 @@ class NegativeIonSource():
         #stałe anionu wodoru
         self.I_S_ION_TEMPERATURE = 1.0 #[eV] #temperatura jonu wodoru wzięta z dokumentacji CERN
         self.hydride_v_term = math.sqrt((2 * self.I_S_ION_TEMPERATURE * abs(self.Electron.charge)) / (self.HydrideIon.rest_mass_kg)) #[m/s] #najprawdopodobniejsza prędkość jonów wodoru
-        
-    """
-    -+/=============================================================/+-
-        ION Source - Wszsytkie metody dątyczące jego
-    -+/=============================================================/+-
-    """
 
     #Metoda wyliczająca mase wszystkich cząsteczek wodoru znajdującego się w komorze ION Source
     def I_S_calculate_mass_hydrogen(self, previous_mass, time_us):
-        if not (195 <= time_us <= 505):
+        if not (200 <= time_us <= 500):
              raise OverflowError(f"Czas impulsu {time_us} us poza zakresem [200, 500]")
-        time_s = time_us*1e-6 #[us] #zmiana jednostki: us -> s
+        time_s = time_us*1e-6 
         dt = 1E-7
         current_time = 0.0
         total_hydrogen_mass = previous_mass
@@ -103,20 +101,14 @@ class NegativeIonSource():
             if total_hydrogen_mass <= 0:
                 mass_loss_rate = 0.0
             else:
-                #gęstość masowa gazu w komorze
                 gas_density = total_hydrogen_mass / self.I_S_CHAMBER_VOLUME
                     
-                #efuzja, czyli ile kg gazu na sekundę ucieka przez otwór
                 mass_loss_rate = 0.25 * gas_density * self.hydrogen_v_avg * self.I_S_hole_area
                 
-            #zmiana masy 
             mass_change = (self.HYDROGEN_FLOW_RATE - mass_loss_rate) * dt
                     
-
-            #obliczamy nową masę
             total_hydrogen_mass = max(0.0, total_hydrogen_mass + mass_change)
                     
-            #zmieniamy czas o dt sekeund
             current_time += dt    
             
         return total_hydrogen_mass
@@ -131,15 +123,13 @@ class NegativeIonSource():
     def I_S_calculate_chamber_pressure(self, n): 
         p = n * self.PhysicalConstants.BOLTZMANN_CONSTANT * self.I_S_CHAMBER_TEMPERATURE 
         
-        #ograniczenie ciśnienia [Pa] w komorze
-        if 3.0 < p <  4.0:
-            return p
-        else:
-            print("nieodpowiednie cisnienie")
-            return p
+        return p
             
     #Metoda obliczająca wydajność jonizacji na podstawie mocy startowej RF
     def I_S_calculate_ionization_efficiency(self, I_S_rf_peak_power):
+        if not (20 <= I_S_rf_peak_power <= 80):
+            raise ValueError(f"Moc szczytowa RF poza zakresem [20, 80] kW")
+       
         p_threshold = 32.5  
         k_steepness = 0.6   
         try:
@@ -148,70 +138,75 @@ class NegativeIonSource():
         except ValueError:
             ionization_efficiency = 0.0
 
-        #zabezpieczenie przed wyjściem poza logiczny zakres sprawności [0.01 do 1.0]
         ionization_efficiency = max(0.01, min(1.0, ionization_efficiency))
         return ionization_efficiency, I_S_rf_peak_power
 
     #Metoda oblicząjąca energie wytworzoną przez pole magnetyczne fal radiowych
     def I_S_calculate_RF_field_energy(self, n, I_S_rf_power):
-         #średnia droga swobodna
+        if  not (20 <= I_S_rf_power <= 100):
+            raise ValueError("Moc RF poza zakresem [10, 50] kW")
+
         lambda_path = 1 / (math.sqrt(2) * math.pi * n * (self.Hydrogen.molecular_diameter**2))
         
         #wzór na podstawie danych z dokumentacji CERN i relacji: natężenie pole elektrycznego a moc w układach rezonansowych/antnowych
         max_electric_field = 77513.2 * math.sqrt(I_S_rf_power/30) 
 
-        #energia przekazana przez pole RF - energia jaką zyskuje elektron 
-        #(jeśli energia jest wieksza od energii wiazania atomu dojdzie do rozbicia i jonizacji H2)
         rf_work = abs(self.Electron.charge)*max_electric_field*lambda_path 
         
         return rf_work, I_S_rf_power
 
     #Metoda obliczająca koncentrację elektronów w plazmie, która jest równa koncentracji protonów w plazmie
     def I_S_calculate_electron_density(self, I_S_rf_power, ionization_efficiency):
-        I_S_rf_power = I_S_rf_power * 1000 #[w] #zamiana jednostki: kW -> W
-        
-        #obliczenie czystej mocy pola magnetycznego, gdzie współczynnik 0,65 to procent mocy, która wpływa na elektrony, 
+        I_S_rf_power = I_S_rf_power * 1000 
+
         I_S_net_rf_power = I_S_rf_power * 0.65 * ionization_efficiency 
         
-        #koszt zerwania energetyczny wiązań między atomami i nie udanych prób wcześniejszych
         ionization_energy_cost = 40 * abs(self.Electron.charge) 
 
-        #współczynnik objętościowy 
         alpha_recombination = 1.0e-13 
 
-        #obliczenie koncentracji dla jonow o takim samym ladunku z równania bilansu mocy i objętościowej rekombinacji plazmy w stanie ustalonym
         ne = math.sqrt(I_S_net_rf_power / (self.I_S_CHAMBER_VOLUME * alpha_recombination * ionization_energy_cost))
 
         return ne
 
     #Metoda obliczająca prąd wiązki anionów wodoru wychodzącej z ION Source
     def I_S_calculate__beam_current(self, T_ces, ne):
+        if T_ces < 40:
+            raise ValueError(
+                f"Temperatura {T_ces}°C jest ZA NISKA!\n"
+                "Cez nie odparowuje. Brak efektywnej produkcji jonów H-."
+                )
+
+        elif T_ces > 100:
+            raise ValueError(
+                f"BŁĄD KRYTYCZNY: Temperatura {T_ces}°C jest ZA WYSOKA!\n"
+                "Gwałtowny wyrzut cezu wywołał przebicie elektryczne na elektrodach 45 kV."
+                )
+
+        elif 80 < T_ces <= 100:
+            print(f"OSTRZEŻENIE: Temperatura {T_ces}°C przekracza normę operacyjną. Wydajność źródła drastecznie spada.!")
+ 
         #zasada quasi-neutralności plazmy, czyli można przyjąc, że gestość jonów dodatnich jest równa gestości elektronów
         np = ne 
         
         #wzór Gaussa na sprawność cezu (eta) reprezentuje wydajność, z jaką powierzchnia elektrody przekształca uderzające w nią cząsteczki w jony ujemne wodoru
         eta_ces = math.exp(-((T_ces - 60) ** 2) / 50)
         
-        #całkowita liczbę anionów wodoru, jaka rodzi się w ciągu jednej sekundy na cezowej elektrodzie
         hydride_production_rate = np* self.hydride_v_term * self.I_S_AP_AREA_CS * eta_ces 
         
-        #wylicza ile jaki prąd został wygenerowany w wiązcę, która opuści ION Source
         I_gen = abs(self.Electron.charge) * hydride_production_rate 
         
         #wynik działania prawa Childa-Langmuira (pokazuje maksymalną przepustowość)
         I_limit = 4.71E-10 * (self.I_S_EXTRACTION_ELECTRODE_VOLTAGE ** 1.5) 
         
-        #sprawdzenie i wybór miejszej wartości (prad ma ograniczoną przepustowość)
         I_final = min(I_gen, I_limit)
         
         return I_final
     
     #Metoda licząca ilość jonów, które wypłyneły z ION source na podstawie ilosci ladunków elektrycznych
     def I_S_calculate_beam_intensity(self, I_final):
-        #czas trwania impulsu w CERN (600 mikrosekund)
         t_pulse = 0.0006 
         
-        #liczba cząstek w wiązce
         N_Intensity = (I_final * t_pulse) / abs(self.Electron.charge) 
         
         return N_Intensity
@@ -222,13 +217,12 @@ class NegativeIonSource():
         epsilon = (self.I_S_AP_RADIUS * math.sqrt(self.I_S_ION_TEMPERATURE / (self.HydrideIon.rest_mass_mev*1E6)))*1E6 #[pi * mm * mrad]
         
         return epsilon
-       
+"""
+-+/=====================================================/+-
+    Klasa odcinka Linac4 
+-+/=====================================================/+-    
+""" 
 class Linac4():
-    """
-    -+/=====================================================/+-
-        LEBT (Low Energy Beam Transport) - wszsytkie metody 
-    -+/=====================================================/+-
-    """
     def __init__(self, PhysicalConstants, Electron, Proton, Hydrogen, HydrideIon):
         
         #zdefiniowanie obiektów
@@ -239,147 +233,150 @@ class Linac4():
         self.HydrideIon = HydrideIon                
  
         #stałe LEBT
-        self.LEBT_LENGTH = 1.8 # [m] 
-        self.LEBT_RADIUS = 0.01 #[m]       
-        self.NOMINAL_LOSS_PER_M = 0.05      #stała naturalna strata 5% prądu na każdy metr drogi
+        self.LEBT_LENGTH = 1.8    #[m]
+        #promień rury — granica śmierci wiązki
+        self.LEBT_RADIUS = 0.01   #[m]
+        self.NOMINAL_LOSS_PER_M = 0.05 
         self.LEBT_VOLUME = math.pi * (self.LEBT_RADIUS ** 2) * self.LEBT_LENGTH
+
+        #stałe kalibracyjne dla mechaniki gry:
+        self.LEBT_SPACE_CHARGE_SCALE = 5.0E-6  
+        self.LEBT_SOLENOID_GAME_SCALE = 0.8    
     
-    #Metoda obliczająca zmianę ciśnienia w próżni
+    """
+    -+/=====================================================/+-
+        LEBT (Low Energy Beam Transport) - wszsytkie metody 
+    -+/=====================================================/+-
+    """
+    
+    #Metoda obliczająca aktualne ciśnienie w rurze po jednym ticku (komendzie)
     def lebt_calculate_vacuum(self, pumps_active, current_vacuum, dt=1E-3):
-        #napływ gazu zewnątrz podczas jednej sekundy
-        leak_rate = 1.5E-6 
-        
-        pumping_speed = 120.0 
-        if pumps_active == True:
-            pumping_speed = 120.0
-        else: 
+        leak_rate = 1.5E-6  # [Pa*m^3/s] stały napływ gazu przez mikroszczeliny
+
+        if pumps_active:
+            # losowa fluktuacja sprawności pompy ±8% — pompa nie działa idealnie
+            pump_efficiency = random.uniform(0.92, 1.08)
+            pumping_speed = 120.0 * pump_efficiency
+        else:
             pumping_speed = 0.0
 
-        #zmiana ciśnienia próżni w czasie dt
         dp = ((leak_rate - (pumping_speed * current_vacuum)) / self.LEBT_VOLUME) * dt
         new_vacuum = current_vacuum + dp
-        
-        #wyprowadzanie wyniku i blokada przed tym by ciśnienie nie wynosiło 0 (jest to nie realne)
+
         return max(1.0E-7, min(1.0E-3, new_vacuum))
-
-    #Metoda obliczjąca straty prądu wiązki przez zderzenia z gazem resztkowym
+    
+    #Metoda obliczająca straty prądu przez zderzenia jonów
     def lebt_calculate_transmission(self, vacuum, current):
-        if current <= 0:
+        if current is None or current <= 0:
             return 0.0
-            
-        sigma_stripping = 4.2E-19 
 
-        gas_n = vacuum * 2.4E22 
-        
+        sigma_stripping = 4.2E-19  
+        gas_n = vacuum * 2.4E22   
+
         if gas_n > 0:
             lambda_stripping = 1.0 / (gas_n * sigma_stripping)
-            
-            #spadek prądu na dystansie długości LEBT (1.8m) wg rozkładu Beera-Lamberta
             survival_probability = math.exp(-self.LEBT_LENGTH / lambda_stripping)
             return current * survival_probability
-        
+
         return current
 
-    #Metoda obliczająca ogniskowanie wiązki za pomocą pola magnetycznego Solenoidu
+    #Metoda obliczająca siłę skupiającą solenoidu na podstawie prądu gracza
     def lebt_calculate_solenoid_focus(self, current_solenoid, beam_energy_mev):
         if current_solenoid <= 0:
             return 0.0
 
-        magnetic_induction = current_solenoid * 0.0076 
+        #szum termiczny cewki
+        thermal_noise = random.gauss(0, 0.02)
 
-        kinetic_energy = beam_energy_mev * 1.602176634E-13 #[MeV] -> [J]
-        charge = abs(self.HydrideIon.charge)
-        
-        lenght_solenoid = 0.15 
+        force = ((current_solenoid / 100.0) ** 2) * self.LEBT_SOLENOID_GAME_SCALE
+        focusing_force = force * (1.0 + thermal_noise)
 
-        focusing_force = (charge * (magnetic_induction ** 2) * lenght_solenoid) / (4 * kinetic_energy)
-        
         return focusing_force
 
-    #Metoda licząca straty prądu spowodowane uderzeniami jonów z wiązki o ścianki oraz przez naturalne straty
+    #Metoda obliczająca straty prądu przez uderzenia wiązki o ścianki rury + naturalne
     def lebt_calculate_scraping_and_nominal_losses(self, y, current, dx):
         if current <= 0:
             return 0.0
-        #strata transportowa
+
         current -= current * (self.NOMINAL_LOSS_PER_M * dx)
 
-        #strata przez uderzenia o ścianki
         sigma_beam = 0.0025
         distance_from_wall = self.LEBT_RADIUS - abs(y)
-        
-        
+
         if distance_from_wall < (3 * sigma_beam):
-            proximity_factor = math.exp(- (distance_from_wall ** 2) / (2 * (sigma_beam ** 2)))
+            proximity_factor = math.exp(-(distance_from_wall ** 2) / (2 * (sigma_beam ** 2)))
             scraping_loss = current * proximity_factor * (dx / self.LEBT_LENGTH)
             current = max(0.0, current - scraping_loss)
 
         return current
     
-    #strata prądu wiązki w wyniku niestabilności urządzeń
-    def lebt_apply_environmental_drift(self, current_solenoid, current_vacuum, dx):
+    #Metoda symuluje degradację maszyny 
+    def lebt_apply_environmental_drift(self, current_solenoid, current_vacuum, beam_angle, dx):
         if dx <= 0:
-            return current_solenoid, current_vacuum
+            return current_solenoid, current_vacuum, 0.0
 
         cooling_fluctuation = random.uniform(0.95, 1.05)
-        #zmiana prądu zależy od kwadratu prądu (ciepło Joule'a P = I^2 * R) oraz przebytej drogi
-        thermal_decay = 1.2E-5 * (current_solenoid ** 2) * cooling_fluctuation * dx
+        thermal_decay = 3.0E-5 * (current_solenoid ** 2) * cooling_fluctuation * dx
         new_solenoid = max(0.0, current_solenoid - thermal_decay)
 
         desorption_burst = random.uniform(5.0E-7, 2.8E-6)
-        new_vacuum = current_vacuum + (desorption_burst * dx)
-        
-        new_vacuum = min(1.0E-3, new_vacuum)
+        new_vacuum = min(1.0E-3, current_vacuum + desorption_burst * dx)
 
-        return new_solenoid, new_vacuum
-        
-    
-    #Metoda obliczająca zmianę położenia poprzecznego y oraz kąta
-    def lebt_calculate_trajectory_step(self, x, y, angle, current, focusing_force, steerer_voltage, dx):   
-        space_charge_kick = (1.5E-4 * current * dx) / (abs(y) + 0.001) 
+        vibration_kick = random.gauss(0, 0.0004)
+        new_angle = beam_angle + vibration_kick
 
-        #wpływ magnesu korekcyjnego (Steerera)
+        return new_solenoid, new_vacuum, new_angle
+
+    #Metoda obliczająca nowe position_y i kąt wiązki po przebyciu dx metrów
+    def lebt_calculate_trajectory_step(self, x, y, angle, current, focusing_force, steerer_voltage, dx):
+        space_charge_kick = (self.LEBT_SPACE_CHARGE_SCALE * current * dx) / (abs(y) + 0.005)
+       
         steerer_kick = steerer_voltage * 1.85E-5
 
         if focusing_force > 0:
-            new_angle = angle - (focusing_force * y * dx) + steerer_kick
+            solenoid_angle_correction = -(focusing_force * y * dx)
         else:
-            new_angle = angle + steerer_kick
+            solenoid_angle_correction = 0.0
 
         if y >= 0:
-            new_angle += space_charge_kick
+            new_angle = angle + solenoid_angle_correction + steerer_kick + space_charge_kick
         else:
-            new_angle -= space_charge_kick
+            new_angle = angle + solenoid_angle_correction + steerer_kick - space_charge_kick
 
         new_y = y + (new_angle * dx)
         new_x = x + dx
 
         return new_x, new_y, new_angle
-    
-    #Metoda auktualizująca wszystkie parametry w LEBT
-    def lebt_process_automatic_step(self, beam, current_solenoid, current_vacuum, steerer_voltage, dx):
-       
-        #wyznaczenie degradacji maszynowej
-        updated_solenoid, updated_vacuum = self.lebt_apply_environmental_drift(current_solenoid, current_vacuum, dx)
 
-        #ktualizacja położenia wzdłużnego X
+    #Metoda unicjująca wszystko - wywołuje wszystkie powyższe metody w odpowiedniej kolejności.
+    def lebt_process_automatic_step(self, beam, current_solenoid, current_vacuum, steerer_voltage, dx):
+
+        if not beam.is_alive:
+            return current_solenoid, current_vacuum, {}
+
+        prev_current = beam.current
+        prev_y = beam.position_y
+        prev_angle = beam.angle
+
+        updated_solenoid, updated_vacuum, new_angle_after_vibration = self.lebt_apply_environmental_drift(current_solenoid, current_vacuum, beam.angle, dx)
+
+        beam.angle = new_angle_after_vibration
+
         beam.position_x += dx
 
-        #dynamiczne przeliczenie strat prądu wiązki
         beam.current = self.lebt_calculate_transmission(updated_vacuum, beam.current)
+
         beam.current = self.lebt_calculate_scraping_and_nominal_losses(beam.position_y, beam.current, dx)
 
-        #wyznaczenie parametrów optyki magnetycznej dla nowego stanu cewki
-        K = self.lebt_calculate_solenoid_focus(updated_solenoid, beam.energy)
+        force = self.lebt_calculate_solenoid_focus(updated_solenoid, beam.energy)
 
-        #całkowanie wektora geometrii trajektorii (Pozycja Y, Kąt)
         _, new_y, new_angle = self.lebt_calculate_trajectory_step(
-            beam.position_x, beam.position_y, beam.angle, beam.current, K, steerer_voltage, dx
+            beam.position_x, beam.position_y, beam.angle, beam.current, force, steerer_voltage, dx
         )
         beam.position_y = new_y
         beam.angle = new_angle
 
-        #sprawdzenie warunku awaryjnego wyłączenia
-        if abs(beam.position_y) > self.LEBT_RADIUS:
+        if abs(beam.position_y) >= self.LEBT_RADIUS:
             beam.is_alive = False
 
         return updated_solenoid, updated_vacuum

@@ -6,29 +6,36 @@ class User:
 
 class AcceleratorData:
     def __init__(self):
+        self.stage = 0
+        self.step_game = 0
+        self.path_length = 0
+        self.total_time_open_valve = 0
         self.total_hydrogen_mass = 0
         self.n = 0
         self.p = 0
         self.ionization_efficiency = 0
-        self.I_S_rf_start_power = 0
+        self.I_S_rf_peak_power = 0
         self.I_S_rf_power = 0
         self.rf_work = 0
         self.ne = 0
         self.T_cez = 0
         self.current_solenoid = 0
-        self.current_vacuum = 1013.25
-        self.steerer_voltage = 0
-        self.focusing_force = 0
-        self.dx = 0
+        self.current_vacuum = 1013.25  # [Pa] wartość domyślna - ciśnienie atmosferyczne przed pompowaniem
+        self.steerer_voltage = 0       
+        self.focusing_force = 0        
+        self.dx = 0                   
         self.pomp_vacuum_status = False
     
     #Metoda służąca do kopiowania danych z jednego obiektu danych do drugiego
     def copy_from(self, source):
+        self.stage = source.stage
+        self.step_game = 0
+        self.total_time_open_valve = source.total_time_open_valve
         self.total_hydrogen_mass = source.total_hydrogen_mass
         self.n = source.n
         self.p = source.p
         self.ionization_efficiency = source.ionization_efficiency
-        self.I_S_rf_start_power = source.I_S_rf_start_power
+        self.I_S_rf_peak_power = source.I_S_rf_peak_power
         self.I_S_rf_power = source.I_S_rf_power
         self.rf_work = source.rf_work
         self.ne = source.ne
@@ -45,7 +52,11 @@ class AcceleratorEnvironment:
         #niezależne obiekty danych dla każdego akceleratora
         self.negative_ion_source = AcceleratorData()
         self.linac4 = AcceleratorData()
-        
+        self.booster = AcceleratorData()
+        self.ps = AcceleratorData()
+        self.sps = AcceleratorData()
+        self.lhc = AcceleratorData()
+
         #wskaźnik akceleratora
         self.active = None 
 
@@ -55,6 +66,14 @@ class AcceleratorEnvironment:
             self.active = self.negative_ion_source
         elif name == "Linac4":
             self.active = self.linac4
+        elif name == "Booster":
+            self.active = self.booster
+        elif name == "PS":
+            self.active = self.ps
+        elif name == "SPS":
+            self.active = self.sps
+        elif name == "LHC":
+            self.active = self.lhc
 
     #Ukryta metoda do wyszukiwania obiektów danych po nazwie
     def _get_accelerator_by_name(self, name):
@@ -94,4 +113,16 @@ class Beam():
         self.RF_phase = None
         self.bunch_structure = None
 
-        self.is_alive = True #flaga logiczna sprawdzająca, czy wiązka nie uległa zniszczeniu 
+        self.is_alive = True #flaga logiczna sprawdzająca, czy wiązka nie uległa zniszczeniu
+    
+    def caluclate_percent_pos_y(self, LEBT_RADIUS_MM, option=1):
+        percent = abs(self.position_y * 1000) / LEBT_RADIUS_MM * 100 
+        if option == 1:
+            return percent
+        elif option == 2:   
+            if percent < 60:
+                return "OK"
+            elif   percent < 85:
+                return "UWAGA" 
+            else:
+                return "KRYTYCZNE"

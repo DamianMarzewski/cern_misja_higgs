@@ -35,6 +35,8 @@ class Styling:
     underline = "\033[4m"
     pulse = "\033[5m"
     strike = "\033[9m"
+
+    DECORATE_LENGHT = 100
     
     #Kolory zdefiniowane w postaci formatowania ANSII
     title_game_color1 = convert_hex_to_ansii("#1A44AD")
@@ -44,15 +46,18 @@ class Styling:
     welcome_color_1 = convert_hex_to_ansii("#5293F4")
     welcome_color_2 = convert_hex_to_ansii("#3DD0DE")
 
-    prefix_cmd = convert_hex_to_ansii("#1648C6")
+    prefix_cmd = convert_hex_to_ansii("#3162DE")
     
     errors = convert_hex_to_ansii("#B11616")
     valid = convert_hex_to_ansii("#15A817")
     help_color = convert_hex_to_ansii("#087C1F")
     help_2_color = convert_hex_to_ansii("#0CDA32")
 
-    color_1 = convert_hex_to_ansii("#0BCDCD")
+    status_1_color = convert_hex_to_ansii("#0BCDCD")
     status_2_color = convert_hex_to_ansii("#76FBFB")
+
+    hint_color_1 = convert_hex_to_ansii("#A51FFF")
+    hint_color_2 = convert_hex_to_ansii("#780E93")
 
     map_background_color = "#CAECF3"
 

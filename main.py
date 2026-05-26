@@ -47,7 +47,7 @@ def main():
     
     #wyświetlenie raportu na temat wiązki
     Console_clear()
-    panel_l4.do_status_wiazki()
+    panel_l4.do_status_wiazki("")
 
 #Uruchomienie programu
 if __name__ == "__main__":
